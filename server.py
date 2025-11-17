@@ -501,24 +501,6 @@ def handle_reset_players():
     print(f'Game master reset all players (broadcasted to {len(players_list)} players)')
 
 
-@socketio.on('reset_server')
-def handle_reset_server():
-    """Reset entire server state (clear players, stop game). Only the game master may invoke this."""
-    if request.sid != game_state.get('game_master'):
-        emit('error', {'message': 'Only game master can reset the server'})
-        return
-
-    # Clear players and reset global state
-    game_state['players'].clear()
-    game_state['game_started'] = False
-    game_state['current_round'] = 0
-    game_state['total_rounds'] = get_total_rounds()
-    game_state['game_master'] = None
-
-    # Notify everyone and ask clients to reload/handle reset
-    socketio.emit('server_reset', {})
-    print('Game master reset the entire server')
-
 def get_leaderboard():
     """Get sorted leaderboard."""
     players = [
