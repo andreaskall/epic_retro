@@ -147,6 +147,12 @@ socket.on('game_started', (data) => {
     timeLimit = data.timeLimit || 0;
     roundStartTime = Date.now();
     loadRound(data.snippet);
+    // Ensure input and submit button are enabled (re-enable after any reset)
+    codeInput.value = '';
+    codeInput.disabled = false;
+    submitBtn.disabled = false;
+    feedback.classList.add('hidden');
+    codeInput.focus();
     showScreen('game');
     roundInfo.classList.remove('hidden');
     startCountdown();
