@@ -68,6 +68,11 @@ header h1 {
     display: none;
 }
 
+/* Generic hidden utility class used across the UI */
+.hidden {
+    display: none !important;
+}
+
 /* Join Screen */
 .join-box {
     background: rgba(10,12,20,0.7);
