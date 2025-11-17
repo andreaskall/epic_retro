@@ -52,7 +52,7 @@ def calculate_score_breakdown(snippet_points, time_taken, accuracy):
     speed_eligible = accuracy > 70 and time_taken < 30
 
     if speed_eligible:
-        speed_mult = 1.0 + (30 - time_taken) / 30 * 0.3  # Up to 30% bonus for fast + accurate
+        speed_mult = 1.0 + (30 - time_taken) / 30 * 0.5  # Up to 50% bonus for fast + accurate
         speed_bonus = int(base_points * (speed_mult - 1.0))
 
     final_score = max(1, base_points + speed_bonus)  # Minimum 1 point to avoid zero
@@ -177,6 +177,7 @@ def handle_start_game(data=None):
     for player in game_state['players'].values():
         player['current_round'] = 1
         player['start_time'] = time.time()
+        player['round_complete'] = False
 
     # Send each player their first round
     for sid, player in game_state['players'].items():
@@ -242,6 +243,9 @@ def handle_next_round():
             'current_round': game_state['current_round'],
             'total_rounds': game_state['total_rounds']
         }, room=game_state['game_master'])
+
+    # Immediately update master with cleared player statuses
+    broadcast_player_update()
 
     print(f'Master advanced to round {game_state["current_round"]}')
 
@@ -315,10 +319,57 @@ def get_player_list():
             'name': player['name'],
             'score': player['score'],
             'current_round': player['current_round'],
-            'total_rounds': game_state['total_rounds']
+            'total_rounds': game_state['total_rounds'],
+            'round_complete': player.get('round_complete', False)
         }
         for player in game_state['players'].values()
     ]
+
+
+@socketio.on('reset_players')
+def handle_reset_players():
+    """Reset scores and rounds for all players. Only the game master may invoke this."""
+    if request.sid != game_state.get('game_master'):
+        emit('error', {'message': 'Only game master can reset players'})
+        return
+
+    for player in game_state['players'].values():
+        player['score'] = 0
+        player['current_round'] = 0
+        player['start_time'] = None
+        player['round_complete'] = False
+
+    # Stop the current game and reset global round state
+    game_state['game_started'] = False
+    game_state['current_round'] = 0
+
+    # Broadcast update so clients and master refresh
+    broadcast_player_update()
+    # Include the updated player list so master can immediately switch to setup view
+    players_list = get_player_list()
+    socketio.emit('players_reset', {'players': players_list, 'total_rounds': game_state['total_rounds']})
+    # Some clients may not respond to the custom event in certain browsers — also emit a simple 'force_lobby' event
+    socketio.emit('force_lobby', {})
+    print(f'Game master reset all players (broadcasted to {len(players_list)} players)')
+
+
+@socketio.on('reset_server')
+def handle_reset_server():
+    """Reset entire server state (clear players, stop game). Only the game master may invoke this."""
+    if request.sid != game_state.get('game_master'):
+        emit('error', {'message': 'Only game master can reset the server'})
+        return
+
+    # Clear players and reset global state
+    game_state['players'].clear()
+    game_state['game_started'] = False
+    game_state['current_round'] = 0
+    game_state['total_rounds'] = get_total_rounds()
+    game_state['game_master'] = None
+
+    # Notify everyone and ask clients to reload/handle reset
+    socketio.emit('server_reset', {})
+    print('Game master reset the entire server')
 
 def get_leaderboard():
     """Get sorted leaderboard."""

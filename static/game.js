@@ -60,11 +60,13 @@ codeInput.addEventListener('input', () => {
 codeInput.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation();
         if (!submitBtn.disabled) {
             submitCode();
         }
     }
 });
+
 
 // Also listen for the shortcut globally in case user is not in the text area
 document.addEventListener('keydown', (e) => {
@@ -153,6 +155,53 @@ socket.on('update_leaderboard', (data) => {
 
 socket.on('error', (data) => {
     showFeedback(data.message, 'error');
+});
+
+// When master resets players, return player UI to waiting/lobby state
+socket.on('players_reset', (data) => {
+    console.log('Received players_reset from server', data);
+
+    // Stop any active timers and disable submission
+    stopCountdown();
+    submitBtn.disabled = true;
+    codeInput.disabled = true;
+
+    // Clear code input and feedback
+    codeInput.value = '';
+    feedback.classList.add('hidden');
+
+    // Reset round info display
+    roundInfo.classList.add('hidden');
+    currentRound = 0;
+    currentRoundSpan.textContent = currentRound;
+
+    // Update player list if provided
+    if (data && Array.isArray(data.players)) {
+        updatePlayerList(data.players);
+    } else {
+        // Ask server for fresh player list
+        socket.emit('get_leaderboard');
+    }
+
+    // Show lobby/waiting screen
+    showScreen('lobby');
+});
+
+// Fallback event for browsers that may not handle the custom payload event reliably
+socket.on('force_lobby', (data) => {
+    console.log('Received force_lobby from server', data);
+    // Reuse the same reset logic — stop timers, disable input and show lobby
+    stopCountdown();
+    submitBtn.disabled = true;
+    codeInput.disabled = true;
+    codeInput.value = '';
+    feedback.classList.add('hidden');
+    roundInfo.classList.add('hidden');
+    currentRound = 0;
+    currentRoundSpan.textContent = currentRound;
+    showScreen('lobby');
+    // Request updated players list so UI refreshes
+    socket.emit('get_leaderboard');
 });
 
 // Functions
@@ -370,12 +419,14 @@ function showWaitingScreen(data) {
         `;
     }
 
+    const accuracyDisplay = (typeof data.accuracy === 'number') ? data.accuracy.toFixed(2) : Number(data.accuracy).toFixed(2);
+
     roundResults.innerHTML = `
         <div class="round-complete-header">
             <strong>Round ${data.round} Complete! ✅</strong>
         </div>
         <div class="accuracy-feedback ${accuracyClass}">
-            <strong>Accuracy: ${data.accuracy}%</strong>
+            <strong>Accuracy: ${accuracyDisplay}%</strong>
             <div class="accuracy-message">${accuracyMessage}</div>
         </div>
         <div class="score-breakdown-detailed">

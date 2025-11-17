@@ -13,6 +13,8 @@ const pregameSection = document.getElementById('pregame-section');
 const gameSection = document.getElementById('game-section');
 const playerCountEl = document.getElementById('player-count');
 const startGameBtn = document.getElementById('start-game-btn');
+const resetPlayersBtn = document.getElementById('reset-players-btn');
+const resetServerBtn = document.getElementById('reset-server-btn');
 const timeLimitSelect = document.getElementById('time-limit');
 
 const currentRoundNum = document.getElementById('current-round-num');
@@ -30,6 +32,8 @@ const playerGrid = document.getElementById('player-grid');
 // Event Listeners
 startGameBtn.addEventListener('click', startGame);
 nextRoundBtn.addEventListener('click', nextRound);
+resetPlayersBtn.addEventListener('click', resetPlayers);
+resetServerBtn.addEventListener('click', resetServer);
 
 // Socket Events
 socket.on('connect', () => {
@@ -74,6 +78,38 @@ socket.on('game_over_master', () => {
     nextRoundBtn.textContent = 'Game Over';
 });
 
+socket.on('players_reset', (data) => {
+    // Server reset players scores/rounds — switch master UI back to Game Setup
+    alert('All players have been reset (scores and rounds cleared). Returning to Game Setup.');
+
+    // Update internal state
+    gameStarted = false;
+
+    // Update players if included
+    if (data && Array.isArray(data.players)) {
+        players = data.players;
+    }
+
+    // Show pregame and hide active game section
+    pregameSection.classList.remove('hidden');
+    gameSection.classList.add('hidden');
+
+    // Reset round indicators
+    currentRound = 0;
+    currentRoundNum.textContent = currentRound;
+
+    // Update displays
+    updatePreGameDisplay();
+    updatePlayerGrid();
+});
+
+socket.on('server_reset', () => {
+    // Full server reset - probably cleared game state and players
+    alert('Server has been reset. Reloading master view...');
+    // Force reload to rejoin as master
+    window.location.reload();
+});
+
 // Functions
 function startGame() {
     if (players.length === 0) {
@@ -92,6 +128,16 @@ function nextRound() {
     if (confirm('Advance to next round?')) {
         socket.emit('next_round');
     }
+}
+
+function resetPlayers() {
+    if (!confirm('Reset all players (clear scores and rounds)? This cannot be undone.')) return;
+    socket.emit('reset_players');
+}
+
+function resetServer() {
+    if (!confirm('Reset entire server (clear all players and game state)? This will disconnect everyone.')) return;
+    socket.emit('reset_server');
 }
 
 function updatePreGameDisplay() {
