@@ -350,6 +350,22 @@ def handle_submit(data):
     score_breakdown = calculate_score_breakdown(snippet_points, time_taken, accuracy)
     round_score = score_breakdown['final_score']
 
+    # Server-side simple cheat detection: detect paste-like impossible speeds
+    try:
+        # Flagged if WPM extremely high (e.g., > 200) and accuracy is suspiciously perfect
+        if wpm > 200 and accuracy > 95:
+            player['flagged_cheating'] = True
+            print(f"Cheat detected for player {player.get('name')} - WPM: {wpm}, Accuracy: {accuracy}")
+            if game_state.get('game_master'):
+                socketio.emit('cheat_detected', {
+                    'player': player.get('name'),
+                    'wpm': wpm,
+                    'accuracy': accuracy,
+                    'round': current_round
+                }, room=game_state['game_master'])
+    except Exception:
+        pass
+
     # Debugging: if accuracy unexpectedly low, log normalized/raw forms and edit distance
     try:
         if accuracy < 90:
@@ -387,6 +403,15 @@ def handle_submit(data):
     player['score'] += round_score
     player['round_complete'] = True
 
+    # Clear the stored expected snippet to avoid accidental reuse
+    try:
+        if 'expected_snippet' in player:
+            del player['expected_snippet']
+        if 'expected_points' in player:
+            del player['expected_points']
+    except Exception:
+        pass
+
     # Send detailed result to player
     emit('round_result', {
         'round': current_round,
@@ -411,6 +436,29 @@ def handle_submit(data):
 @socketio.on('get_leaderboard')
 def handle_get_leaderboard():
     emit('update_leaderboard', {'leaderboard': get_leaderboard()})
+
+
+@socketio.on('paste_detected')
+def handle_paste_detected():
+    """Client reported a paste attempt (or paste prevented). Flag player for moderation and notify master."""
+    player = game_state['players'].get(request.sid)
+    name = player.get('name') if player else 'Unknown'
+    print(f'Paste detected from player {name} ({request.sid})')
+    if player is not None:
+        player['paste_attempt'] = True
+    if game_state.get('game_master'):
+        socketio.emit('paste_detected', {'player': name}, room=game_state['game_master'])
+
+
+@socketio.on('copy_attempt')
+def handle_copy_attempt():
+    player = game_state['players'].get(request.sid)
+    name = player.get('name') if player else 'Unknown'
+    print(f'Copy attempt detected from player {name} ({request.sid})')
+    if player is not None:
+        player['copy_attempt'] = True
+    if game_state.get('game_master'):
+        socketio.emit('copy_attempt', {'player': name}, room=game_state['game_master'])
 
 def get_player_list():
     """Get list of players with detailed info for game master."""

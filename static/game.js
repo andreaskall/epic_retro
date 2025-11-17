@@ -56,6 +56,39 @@ codeInput.addEventListener('input', () => {
     feedback.classList.add('hidden');
 });
 
+// Anti-cheat UI: make the displayed snippet harder to copy
+// These are client-side deterrents only (not foolproof). Server-side checks are enforced too.
+try {
+    // Disable text selection on the displayed snippet
+    codeDisplay.style.userSelect = 'none';
+    codeDisplay.style.webkitUserSelect = 'none';
+    codeDisplay.style.msUserSelect = 'none';
+
+    // Prevent right-click / context menu on snippet
+    codeDisplay.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Prevent copy/cut events on the snippet element
+    codeDisplay.addEventListener('copy', (e) => {
+        e.preventDefault();
+        showFeedback('Copying the snippet is disabled to keep the game fair.', 'error');
+        // Optionally notify server that a copy attempt was made (for moderation)
+        socket.emit('copy_attempt');
+    });
+    codeDisplay.addEventListener('cut', (e) => {
+        e.preventDefault();
+        socket.emit('copy_attempt');
+    });
+} catch (err) {
+    console.warn('Anti-cheat snippet protections not fully supported in this browser', err);
+}
+
+// Prevent pasting into the typing area and notify server when attempted
+codeInput.addEventListener('paste', (e) => {
+    e.preventDefault();
+    showFeedback('Pasting is disabled. Please type the snippet manually.', 'error');
+    socket.emit('paste_detected');
+});
+
 // Add keyboard shortcut for submit (Ctrl+Enter)
 codeInput.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
