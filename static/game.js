@@ -8,6 +8,10 @@ let totalRounds = 10;
 let roundStartTime = null;
 let timeLimit = 0; // 0 means no time limit
 let countdownTimer = null;
+// Current snippet stored client-side for live projection
+let currentSnippetCode = '';
+let currentSnippetPoints = 0;
+let lastInputValue = '';
 
 // DOM Elements
 const joinScreen = document.getElementById('join-screen');
@@ -52,9 +56,108 @@ playerNameInput.addEventListener('keypress', (e) => {
 submitBtn.addEventListener('click', submitCode);
 playAgainBtn.addEventListener('click', () => location.reload());
 
-codeInput.addEventListener('input', () => {
+// Live input handler: hide feedback, update hero meter, and spawn particle on inserted chars
+codeInput.addEventListener('input', (e) => {
     feedback.classList.add('hidden');
+    try {
+        updateHeroMeter();
+
+        // detect insertion vs deletion
+        const newVal = codeInput.value || '';
+        if (newVal.length > lastInputValue.length) {
+            // spawn a flying particle near the input area to celebrate typing
+            spawnParticle('✨');
+        }
+        lastInputValue = newVal;
+    } catch (err) {
+        console.warn('Hero meter update failed', err);
+    }
 });
+
+/**
+ * Compute Levenshtein distance (chars)
+ */
+function levenshtein(a, b) {
+    if (a === b) return 0;
+    const na = a.length, nb = b.length;
+    if (na === 0) return nb;
+    if (nb === 0) return na;
+    let prev = new Array(nb + 1);
+    for (let j = 0; j <= nb; j++) prev[j] = j;
+    for (let i = 1; i <= na; i++) {
+        let cur = [i];
+        for (let j = 1; j <= nb; j++) {
+            const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+            cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+        }
+        prev = cur;
+    }
+    return prev[nb];
+}
+
+function mapAccuracyToMultiplier(acc) {
+    if (acc < 20) return 0.01;
+    if (acc < 40) return 0.05;
+    if (acc < 60) return 0.20;
+    if (acc < 80) return 0.50;
+    if (acc < 95) return 0.80;
+    return 1.0;
+}
+
+function normalizeText(s) {
+    if (!s) return '';
+    // simple normalization: collapse CRLF, trim trailing spaces per line
+    s = s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    return s.split('\n').map(l => l.replace(/\s+$/,'')).join('\n');
+}
+
+function updateHeroMeter() {
+    const expected = normalizeText(currentSnippetCode || codeDisplay.textContent || '');
+    const actual = normalizeText(codeInput.value || '');
+    if (!expected) return;
+    // exact match fast path
+    let accuracy = 0;
+    if (expected === actual) accuracy = 100;
+    else {
+        const ed = levenshtein(expected, actual);
+        const denom = Math.max(expected.length, actual.length || 1);
+        accuracy = Math.max(0, Math.round((1 - ed / denom) * 100));
+    }
+
+    // map to server-style accuracy multiplier and compute projected base points
+    const accMult = mapAccuracyToMultiplier(accuracy);
+    const projBase = Math.max(1, Math.floor((currentSnippetPoints || parseInt(pointsLabel.textContent.replace(/\D/g,'')) || 0) * accMult));
+
+    // Update meter UI
+    const fill = document.getElementById('meter-fill');
+    const projText = document.getElementById('projected-points');
+    if (fill) fill.style.width = `${Math.min(100, accuracy)}%`;
+    if (projText) projText.textContent = projBase;
+
+    // small avatar reaction for great accuracy
+    const avatar = document.querySelector('.hero-avatar');
+    if (avatar) {
+        if (accuracy > 95) {
+            avatar.style.transform = 'scale(1.08)';
+            setTimeout(() => avatar.style.transform = '', 220);
+        }
+    }
+}
+
+function spawnParticle(char) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.textContent = char;
+    document.body.appendChild(p);
+    // position near the input: random x within input rect, at bottom of input
+    const rect = codeInput.getBoundingClientRect();
+    const x = rect.left + Math.random() * rect.width;
+    const y = rect.top + rect.height - 10;
+    p.style.left = `${x}px`;
+    p.style.top = `${y}px`;
+    // remove after animation
+    setTimeout(() => { try { p.remove(); } catch (e) {} }, 900);
+}
 
 // Anti-cheat UI: make the displayed snippet harder to copy
 // These are client-side deterrents only (not foolproof). Server-side checks are enforced too.
@@ -183,6 +286,9 @@ socket.on('game_state', (data) => {
 socket.on('join_success', (data) => {
     currentPlayer = data.name;
     welcomeName.textContent = data.name;
+    // update hero name
+    const heroNameEl = document.getElementById('hero-name');
+    if (heroNameEl) heroNameEl.textContent = data.name;
     showScreen('lobby');
 });
 
@@ -340,6 +446,12 @@ function loadRound(snippet) {
     codeDisplay.textContent = snippet.code;
     codeInput.value = '';
     codeInput.focus();
+    // store snippet locally for live projection
+    currentSnippetCode = snippet.code;
+    currentSnippetPoints = snippet.points;
+    lastInputValue = '';
+    // initialize meter
+    updateHeroMeter();
 }
 
 function startCountdown() {
