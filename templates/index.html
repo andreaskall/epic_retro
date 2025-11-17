@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Typing Speed Championship</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ Code Typing Speed Championship ⚡</h1>
+            <div id="round-info" class="round-info hidden">
+                Round <span id="current-round">0</span> of <span id="total-rounds">10</span>
+            </div>
+        </header>
+
+        <!-- Join Screen -->
+        <div id="join-screen" class="screen">
+            <div class="join-box">
+                <h2>Join the Game</h2>
+                <input type="text" id="player-name" placeholder="Enter your name" maxlength="20">
+                <button id="join-btn" class="btn btn-primary">Join Game</button>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="screen hidden">
+            <div class="lobby-box">
+                <h2>Waiting for Game to Start</h2>
+                <p>Welcome, <strong id="welcome-name"></strong>!</p>
+                <div id="player-list" class="player-list"></div>
+                <p class="info-text">Waiting for game master to start the game...</p>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen hidden">
+            <div class="game-container">
+                <!-- Code Display -->
+                <div class="code-section">
+                    <div class="code-header">
+                        <span id="language-label" class="language-badge">C</span>
+                        <span id="points-label" class="points-badge">Points: 0</span>
+                    </div>
+                    <pre id="code-display" class="code-display"></pre>
+                </div>
+
+                <!-- Typing Area -->
+                <div class="typing-section">
+                    <div class="typing-header">
+                        <h3>Type the code below:</h3>
+                        <div id="countdown-timer" class="countdown-timer hidden">
+                            <span id="timer-text">90</span>
+                        </div>
+                    </div>
+                    <textarea id="code-input" class="code-input" placeholder="Start typing..."></textarea>
+                    <div class="button-group">
+                        <button id="submit-btn" class="btn btn-primary">
+                            Submit Code
+                            <span class="shortcut-hint">(Ctrl+Enter)</span>
+                        </button>
+                    </div>
+                    <div id="feedback" class="feedback hidden"></div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div class="leaderboard-section">
+                    <h3>🏆 Leaderboard</h3>
+                    <div id="leaderboard" class="leaderboard"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waiting Screen -->
+        <div id="waiting-screen" class="screen hidden">
+            <div class="waiting-box">
+                <h2>⏳ Round Submitted!</h2>
+                <div id="round-results" class="round-results"></div>
+                <p class="waiting-message">Waiting for game master to start next round...</p>
+
+                <div class="waiting-leaderboard-section">
+                    <h3>🏆 Current Leaderboard</h3>
+                    <div id="waiting-leaderboard" class="leaderboard"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen hidden">
+            <div class="gameover-box">
+                <h2>🎉 Game Over! 🎉</h2>
+                <h3>Final Standings</h3>
+                <div id="final-leaderboard" class="leaderboard"></div>
+                <button id="play-again-btn" class="btn btn-primary">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
+</body>
+</html>
