@@ -2,6 +2,8 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 import os
+import unicodedata
+import re
 from code_snippets import get_snippet, get_total_rounds
 
 app = Flask(__name__)
@@ -68,36 +70,81 @@ def calculate_score_breakdown(snippet_points, time_taken, accuracy):
         'speed_mult': speed_mult
     }
 
-def calculate_accuracy(expected, actual):
-    """Calculate typing accuracy percentage with harsh penalties for short submissions."""
-    if len(expected) == 0:
-        return 100
+def _normalize_text(s):
+    """Normalize text for fair comparison:
+    - Normalize Unicode (NFC)
+    - Normalize line endings to LF
+    - Strip trailing whitespace on each line
+    - Collapse multiple internal spaces is intentionally avoided for code, but could be enabled
+    """
+    if s is None:
+        s = ''
+    # Normalize unicode and line endings
+    s = unicodedata.normalize('NFC', s)
+    s = s.replace('\r\n', '\n').replace('\r', '\n')
+    # Strip trailing whitespace from each line (invisible differences)
+    lines = [line.rstrip() for line in s.split('\n')]
+    return '\n'.join(lines)
 
-    # Heavily penalize empty or very short submissions
-    if len(actual) == 0:
+
+def _levenshtein(a: str, b: str) -> int:
+    """Compute Levenshtein edit distance (characters)."""
+    if a == b:
         return 0
+    na, nb = len(a), len(b)
+    if na == 0:
+        return nb
+    if nb == 0:
+        return na
+    # Use a single-row DP for memory efficiency
+    prev = list(range(nb + 1))
+    for i in range(1, na + 1):
+        cur = [i] + [0] * nb
+        ai = a[i - 1]
+        for j in range(1, nb + 1):
+            cost = 0 if ai == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1,      # deletion
+                         cur[j - 1] + 1,   # insertion
+                         prev[j - 1] + cost)  # substitution
+        prev = cur
+    return prev[nb]
 
-    # If submission is less than 20% of expected length, cap accuracy at 20%
-    if len(actual) < len(expected) * 0.2:
-        return min(20, (len(actual) / len(expected)) * 100)
 
-    # Character-by-character comparison
-    matches = sum(1 for e, a in zip(expected, actual) if e == a)
+def calculate_accuracy(expected, actual):
+    """Calculate typing accuracy as a normalized edit-similarity percentage.
 
-    # Penalize length differences more heavily
-    expected_len = len(expected)
-    actual_len = len(actual)
+    Improvements over prior implementation:
+    - Normalizes unicode and line endings and strips trailing whitespace per-line
+    - Uses character-level Levenshtein distance to compute similarity
+    - Preserves a conservative short-submission cap: if actual is <20% of expected length,
+      we cap reported accuracy at 20% (to discourage empty/abbreviated submissions), but
+      we otherwise return the edit-based similarity which is more robust to small differences
+      such as missing trailing newline or different trailing spaces.
+    """
+    exp = _normalize_text(expected)
+    act = _normalize_text(actual)
 
-    # Base accuracy from character matches
-    base_accuracy = matches / expected_len * 100
+    if len(exp) == 0:
+        return 100.0
 
-    # Apply length penalty
-    if actual_len != expected_len:
-        length_penalty = abs(actual_len - expected_len) / expected_len
-        length_penalty = min(0.5, length_penalty)  # Cap penalty at 50%
-        base_accuracy = base_accuracy * (1 - length_penalty)
+    if len(act) == 0:
+        return 0.0
 
-    return round(max(0, base_accuracy), 2)
+    # Exact match (fast path)
+    if exp == act:
+        return 100.0
+
+    ed = _levenshtein(exp, act)
+    # Use the longer length to normalize distance so extra/short content is penalized
+    denom = max(len(exp), len(act))
+    similarity = max(0.0, 1.0 - (ed / denom))
+    accuracy = round(similarity * 100.0, 2)
+
+    # Cap accuracy for very short submissions relative to expected length
+    if len(act) < len(exp) * 0.2:
+        accuracy = min(accuracy, 20.0)
+
+    return accuracy
 
 def calculate_wpm(text_length, time_taken):
     """Calculate words per minute (using standard 5 chars = 1 word)."""
@@ -182,6 +229,9 @@ def handle_start_game(data=None):
     # Send each player their first round
     for sid, player in game_state['players'].items():
         snippet = get_snippet(1)
+        # store the exact snippet (code and points) that was sent to this player
+        game_state['players'][sid]['expected_snippet'] = snippet['code']
+        game_state['players'][sid]['expected_points'] = snippet['points']
         socketio.emit('game_started', {
             'round': 1,
             'total_rounds': game_state['total_rounds'],
@@ -230,6 +280,9 @@ def handle_next_round():
     # Send new round to all players
     snippet = get_snippet(game_state['current_round'])
     for sid in game_state['players'].keys():
+        # store the exact snippet sent to each player so scoring is deterministic
+        game_state['players'][sid]['expected_snippet'] = snippet['code']
+        game_state['players'][sid]['expected_points'] = snippet['points']
         socketio.emit('new_round', {
             'round': game_state['current_round'],
             'total_rounds': game_state['total_rounds'],
@@ -273,15 +326,62 @@ def handle_submit(data):
         emit('error', {'message': 'All rounds completed'})
         return
 
-    # Get snippet and calculate results
-    snippet = get_snippet(current_round)
+    # Get the typed code and time taken
     typed_code = data.get('code', '')
     time_taken = time.time() - player['start_time']
 
-    accuracy = calculate_accuracy(snippet['code'], typed_code)
-    wpm = calculate_wpm(len(snippet['code']), time_taken)
-    score_breakdown = calculate_score_breakdown(snippet['points'], time_taken, accuracy)
+    # Use the exact snippet that was sent to this player (prevent variation mismatch)
+    expected_code = player.get('expected_snippet')
+    snippet_points = player.get('expected_points')
+    # Fallback: if for some reason we don't have stored snippet, fetch one and store it now
+    if expected_code is None or snippet_points is None:
+        fetched = get_snippet(current_round)
+        if fetched:
+            expected_code = fetched['code']
+            snippet_points = fetched['points']
+            player['expected_snippet'] = expected_code
+            player['expected_points'] = snippet_points
+        else:
+            expected_code = ''
+            snippet_points = 0
+
+    accuracy = calculate_accuracy(expected_code, typed_code)
+    wpm = calculate_wpm(len(expected_code), time_taken)
+    score_breakdown = calculate_score_breakdown(snippet_points, time_taken, accuracy)
     round_score = score_breakdown['final_score']
+
+    # Debugging: if accuracy unexpectedly low, log normalized/raw forms and edit distance
+    try:
+        if accuracy < 90:
+            exp_norm = _normalize_text(expected_code)
+            act_norm = _normalize_text(typed_code)
+            ed = _levenshtein(exp_norm, act_norm)
+            print('--- MISMATCH DEBUG ---')
+            print('Player:', game_state['players'].get(request.sid, {}).get('name'))
+            print('Round:', current_round)
+            print('Accuracy:', accuracy)
+            print('Expected repr:', repr(expected_code))
+            print('Submitted repr:', repr(typed_code))
+            print('Normalized expected repr:', repr(exp_norm))
+            print('Normalized submitted repr:', repr(act_norm))
+            print('Lengths expected/submitted (raw):', len(expected_code), len(typed_code))
+            print('Lengths expected/submitted (norm):', len(exp_norm), len(act_norm))
+            print('Levenshtein(normalized):', ed)
+            print('--- END MISMATCH DEBUG ---')
+            # Also notify master if connected so they can inspect quickly
+            if game_state.get('game_master'):
+                socketio.emit('mismatch_debug', {
+                    'player': game_state['players'].get(request.sid, {}).get('name'),
+                    'round': current_round,
+                    'accuracy': accuracy,
+                    'expected': repr(expected_code),
+                    'submitted': repr(typed_code),
+                    'normalized_expected': repr(exp_norm),
+                    'normalized_submitted': repr(act_norm),
+                    'levenshtein': ed
+                }, room=game_state['game_master'])
+    except Exception as e:
+        print('Error during mismatch debug logging:', e)
 
     # Update player stats
     player['score'] += round_score
