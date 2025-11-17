@@ -52,22 +52,21 @@
                 <!-- Typing Area -->
                 <div class="typing-section">
                     <div class="typing-header">
-                        <h3>Type the code below:</h3>
+                        <h3 class="typing-title">Type the code below:</h3>
+                        <!-- Superhero live meter: shows projected points as player types (inline with title) -->
+                        <div id="hero-meter" class="hero-meter">
+                            <div class="hero-avatar">🦸‍♂️</div>
+                            <div class="hero-info">
+                                <div class="meter-wrap">
+                                    <div class="meter-bg">
+                                        <div id="meter-fill" class="meter-fill" style="width:0%"></div>
+                                    </div>
+                                    <div class="meter-text">Projected: <span id="projected-points">0</span> pts</div>
+                                </div>
+                            </div>
+                        </div>
                         <div id="countdown-timer" class="countdown-timer hidden">
                             <span id="timer-text">90</span>
-                        </div>
-                    </div>
-                    <!-- Superhero live meter: shows projected points as player types -->
-                    <div id="hero-meter" class="hero-meter">
-                        <div class="hero-avatar">🦸‍♂️</div>
-                        <div class="hero-info">
-                            <!-- <div class="hero-name">You:<span id="hero-name">Rookie</span></div> -->
-                            <div class="meter-wrap">
-                                <div class="meter-bg">
-                                    <div id="meter-fill" class="meter-fill" style="width:0%"></div>
-                                </div>
-                                <div class="meter-text">Projected: <span id="projected-points">0</span> pts</div>
-                            </div>
                         </div>
                     </div>
                     <textarea id="code-input" class="code-input" placeholder="Start typing..."></textarea>

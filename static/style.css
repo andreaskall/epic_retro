@@ -333,6 +333,31 @@ header h1 {
     margin-bottom: 15px;
 }
 
+.typing-header .typing-title {
+    margin: 0;
+    font-size: 1.1em;
+    color: #9fd8ff;
+    font-weight: 600;
+}
+
+.typing-header #hero-meter {
+    margin-left: 12px;
+}
+
+/* Keep countdown in the header by default, but when focused-mode is active
+   move it to a fixed floating position in the top-left corner. */
+.typing-header #countdown-timer {
+    margin-left: auto;
+}
+
+.focused-mode #countdown-timer {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    z-index: 45;
+    margin-left: 0;
+}
+
 .countdown-timer {
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
     color: #071022;
