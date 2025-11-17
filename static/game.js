@@ -388,6 +388,7 @@ socket.on('players_reset', (data) => {
     // Show lobby/waiting screen
     showScreen('lobby');
 });
+    
 
 // Fallback event for browsers that may not handle the custom payload event reliably
 socket.on('force_lobby', (data) => {
@@ -396,6 +397,13 @@ socket.on('force_lobby', (data) => {
     stopCountdown();
     submitBtn.disabled = true;
     codeInput.disabled = true;
+        // Central focused-mode toggle: add class when on game screen
+        try {
+            if (screen === 'game') document.body.classList.add('focused-mode');
+            else document.body.classList.remove('focused-mode');
+        } catch (e) {
+            // ignore when DOM not available
+        }
     codeInput.value = '';
     feedback.classList.add('hidden');
     roundInfo.classList.add('hidden');
@@ -722,7 +730,55 @@ function showScreen(screen) {
             gameoverScreen.classList.remove('hidden');
             break;
     }
-}function showNotification(message) {
+    // Central focused-mode toggle: add class when on game screen
+    try {
+        if (screen === 'game') document.body.classList.add('focused-mode');
+        else document.body.classList.remove('focused-mode');
+    } catch (e) {
+        // ignore when DOM not available
+    }
+
+    // Debug log to help verify behavior in the browser console
+    try { console.log('showScreen ->', screen, 'focused-mode=', document.body.classList.contains('focused-mode')); } catch (e) {}
+
+    // Inline fallback: apply minimal inline styles so focused-mode is visible
+    // even if the served CSS is stale or cached. These are cleared when
+    // switching away from the game screen.
+    try {
+        const lb = document.querySelector('.leaderboard-section');
+        const gc = document.querySelector('.game-container');
+        const codeSec = document.querySelector('.code-section');
+        const typingSec = document.querySelector('.typing-section');
+        if (screen === 'game') {
+            if (lb) {
+                lb.style.position = 'fixed';
+                lb.style.top = '16px';
+                lb.style.right = '16px';
+                lb.style.width = '240px';
+                lb.style.maxHeight = 'calc(100vh - 32px)';
+                lb.style.zIndex = '40';
+                lb.style.padding = '12px';
+            }
+            if (gc) {
+                gc.style.display = 'flex';
+                gc.style.flexDirection = 'column';
+                gc.style.alignItems = 'center';
+            }
+            if (codeSec) codeSec.style.width = '92%';
+            if (typingSec) typingSec.style.width = '92%';
+        } else {
+            if (lb) lb.style.cssText = '';
+            if (gc) gc.style.cssText = '';
+            if (codeSec) codeSec.style.cssText = '';
+            if (typingSec) typingSec.style.cssText = '';
+        }
+    } catch (e) {
+        // ignore DOM errors
+    }
+
+}
+
+function showNotification(message) {
     console.log(message);
     // Could add toast notifications here
 }
