@@ -12,6 +12,25 @@ body {
     padding: 20px;
 }
 
+/* Matrix backdrop canvas styling */
+#matrix-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0; /* behind UI */
+    pointer-events: none; /* let clicks pass through */
+    mix-blend-mode: normal;
+    opacity: 0.75;
+}
+
+/* Ensure main UI sits above the backdrop */
+.container {
+    position: relative;
+    z-index: 1;
+}
+
 .container {
     max-width: 1400px;
     margin: 0 auto;

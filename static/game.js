@@ -112,6 +112,63 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+/* Matrix backdrop animation
+   Lightweight canvas animation that renders falling green characters.
+   It runs continuously but is inexpensive and uses requestAnimationFrame.
+*/
+(function initMatrixBackdrop() {
+    const canvas = document.getElementById('matrix-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Characters to use (mono-spaced glyphs look best)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*()[]{}<>\/|';
+    let fontSize = 16;
+    let columns = [];
+    let width = 0;
+    let height = 0;
+
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        // Choose font size proportional to viewport but keep readable
+        fontSize = Math.max(12, Math.floor(Math.min(22, Math.max(12, width / 100))));
+        ctx.font = `${fontSize}px monospace`;
+        columns = new Array(Math.floor(width / fontSize)).fill(0).map(() => Math.floor(Math.random() * height));
+    }
+
+    function draw() {
+        // Slight translucent black to create trail/fade effect
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.fillStyle = '#0f0'; // bright green
+        ctx.textBaseline = 'top';
+
+        for (let i = 0; i < columns.length; i++) {
+            const x = i * fontSize;
+            // pick a random character
+            const ch = chars.charAt(Math.floor(Math.random() * chars.length));
+            const y = columns[i] * fontSize;
+            // slightly brighter for head
+            ctx.fillStyle = `rgba(144, 255, 144, ${Math.random() * 0.8 + 0.2})`;
+            ctx.fillText(ch, x, y);
+
+            // move drop
+            if (y > height && Math.random() > 0.975) {
+                columns[i] = 0;
+            }
+            columns[i]++;
+        }
+        requestAnimationFrame(draw);
+    }
+
+    // initialize
+    resize();
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(draw);
+})();
+
 // Socket Event Handlers
 socket.on('connect', () => {
     console.log('Connected to server');
