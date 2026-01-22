@@ -21,25 +21,26 @@ game_state = {
 
 def calculate_score_breakdown(snippet_points, time_taken, accuracy):
     """
-    Calculate detailed score breakdown based heavily on accuracy, with speed bonus only for high accuracy.
+    Calculate detailed score breakdown with balanced accuracy and speed incentives.
+    Rewards players who are both fast AND accurate, not just accurate.
     accuracy: 0-100
     Returns: dict with detailed breakdown
     """
-    # Exponential accuracy curve - heavily penalizes low accuracy
+    # Exponential accuracy curve - penalizes low accuracy but not as harshly as before
     if accuracy < 20:
         accuracy_mult = 0.01  # Only 1% of points for very low accuracy
         accuracy_tier = "Terrible"
     elif accuracy < 40:
-        accuracy_mult = 0.05  # 5% for poor accuracy
+        accuracy_mult = 0.10  # 10% for poor accuracy (increased from 5%)
         accuracy_tier = "Poor"
     elif accuracy < 60:
-        accuracy_mult = 0.20  # 20% for mediocre accuracy
+        accuracy_mult = 0.30  # 30% for mediocre accuracy (increased from 20%)
         accuracy_tier = "Mediocre"
     elif accuracy < 80:
-        accuracy_mult = 0.50  # 50% for good accuracy
+        accuracy_mult = 0.60  # 60% for good accuracy (increased from 50%)
         accuracy_tier = "Good"
     elif accuracy < 95:
-        accuracy_mult = 0.80  # 80% for very good accuracy
+        accuracy_mult = 0.85  # 85% for very good accuracy (slightly decreased from 80%)
         accuracy_tier = "Very Good"
     else:
         accuracy_mult = 1.0   # Full points for excellent accuracy
@@ -48,14 +49,27 @@ def calculate_score_breakdown(snippet_points, time_taken, accuracy):
     # Calculate base points from accuracy
     base_points = int(snippet_points * accuracy_mult)
 
-    # Speed bonus only applies to high accuracy (>70%)
+    # Speed bonus now applies to good accuracy (>60%) instead of very high (>70%)
+    # and with a higher time threshold (60s instead of 30s max)
     speed_mult = 1.0
     speed_bonus = 0
-    speed_eligible = accuracy > 70 and time_taken < 30
+    speed_eligible = accuracy > 60
 
     if speed_eligible:
-        speed_mult = 1.0 + (30 - time_taken) / 30 * 0.5  # Up to 50% bonus for fast + accurate
-        speed_bonus = int(base_points * (speed_mult - 1.0))
+        # Aggressive speed multiplier: up to 150% bonus (can double the score with perfect speed)
+        # Time decay: max bonus at 5 seconds, diminishes to ~50% bonus at 60 seconds
+        if time_taken <= 5:
+            speed_mult = 2.5  # Max 150% bonus for sub-5-second completion (at 100% accuracy)
+        elif time_taken <= 60:
+            # Linear decay from 2.5x at 5s to 1.5x at 60s
+            speed_mult = 2.5 - (time_taken - 5) / 55 * 1.0
+        else:
+            speed_mult = 1.5  # Minimum 50% bonus for slower submissions (>60s)
+
+        # Apply speed multiplier to the FULL snippet points, not just base points
+        # This gives fast + accurate players significantly more reward
+        fast_accurate_score = int(snippet_points * speed_mult * accuracy_mult)
+        speed_bonus = fast_accurate_score - base_points
 
     final_score = max(1, base_points + speed_bonus)  # Minimum 1 point to avoid zero
 
