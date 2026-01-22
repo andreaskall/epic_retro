@@ -66,6 +66,7 @@ def calculate_score_breakdown(snippet_points, time_taken, accuracy):
         else:
             speed_mult = 1.5  # Minimum 50% bonus for slower submissions (>60s)
 
+
         # Apply speed multiplier to the FULL snippet points, not just base points
         # This gives fast + accurate players significantly more reward
         fast_accurate_score = int(snippet_points * speed_mult * accuracy_mult)
